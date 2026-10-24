@@ -1,0 +1,33 @@
+# Добавка к compose.yaml района: HTTPS через Caddy с сертификатом городского УЦ.
+# Запуск: docker compose -f compose.yaml -f compose.tls.yaml up --build -d
+# Перед запуском в папке tls/ должны лежать district.crt, city-root.crt и private/district.key.
+services:
+  tls:
+    image: caddy:2.8-alpine
+    # не root: тот же пользователь, что владеет файлом ключа на вашем компьютере (в WSL обычно 1000)
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      XDG_DATA_HOME: /tmp/data
+      XDG_CONFIG_HOME: /tmp/config
+      DISTRICT_HOST: ${DISTRICT_HOST:?задайте DISTRICT_HOST в .env, например bank.city.lab}
+      UPSTREAM: api:8080
+    ports:
+      - "127.0.0.1:8443:8443"   # HTTPS — только на своём компьютере (как в шаблоне района)
+      - "127.0.0.1:8081:8080"   # HTTP → перенаправление на HTTPS
+    volumes:
+      - ./tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./tls/district.crt:/certs/district.crt:ro
+      - ./tls/private/district.key:/certs/private/district.key:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    depends_on: [api]
+    networks: [internal]
+    restart: unless-stopped
+
+  # api больше не публикует порт наружу: доступ к району — только по HTTPS через tls
+  api:
+    ports: !reset []

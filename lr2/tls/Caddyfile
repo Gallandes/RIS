@@ -1,0 +1,31 @@
+# TLS для района: Caddy принимает HTTPS и передаёт запросы сервису api по внутренней сети.
+# Имя района берётся из переменной DISTRICT_HOST (задаётся в compose.tls.yaml).
+{
+	# Сертификат выдаёт городской УЦ: Caddy не ходит в интернет за сертификатами
+	auto_https off
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$DISTRICT_HOST}:8443 {
+	tls /certs/district.crt /certs/private/district.key {
+		protocols tls1.2 tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	reverse_proxy {$UPSTREAM:api:8080}
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Обычный HTTP — только перенаправление на HTTPS
+http://{$DISTRICT_HOST}:8080 {
+	redir https://{host}:8443{uri} permanent
+}
